@@ -19,38 +19,43 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Storage com multer-storage-cloudinary
+// Configurar Multer com Cloudinary
 const storage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: "cultos", // nome da pasta na conta do Cloudinary
+    folder: "cultos",
     allowed_formats: ["jpg", "png", "jpeg", "webp"],
   },
 });
 
 const upload = multer({ storage });
 
-// Conexão com banco MySQL (Railway)
-const db = mysql.createConnection({
+// Criar pool de conexões MySQL
+const db = mysql.createPool({
   host: process.env.DB_HOST,
   port: process.env.DB_PORT,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
 });
 
-db.connect((err) => {
+// Testar conexão no start do servidor
+db.getConnection((err, connection) => {
   if (err) {
     console.error("Erro ao conectar ao MySQL:", err);
-    return;
+    process.exit(1); // encerra app se não conectar
   }
   console.log("✅ Conectado ao MySQL do Railway!");
+  connection.release(); // libera conexão
 });
 
-// Rota: publicar culto com imagem (Cloudinary)
+// Rota: publicar culto com upload de imagem
 app.post("/cultos", upload.single("imagem"), (req, res) => {
   const { titulo } = req.body;
-  const imagem_path = req.file?.path || null; // URL da imagem no Cloudinary
+  const imagem_path = req.file?.path;
 
   if (!titulo || !imagem_path) {
     return res.status(400).json({ erro: "Faltando título ou imagem" });
@@ -66,7 +71,7 @@ app.post("/cultos", upload.single("imagem"), (req, res) => {
   });
 });
 
-// Rota: último culto
+// Rota: pegar último culto
 app.get("/cultos/ultimo", (req, res) => {
   const sql = "SELECT * FROM cultos ORDER BY criado_em DESC LIMIT 1";
   db.query(sql, (err, results) => {
@@ -78,7 +83,7 @@ app.get("/cultos/ultimo", (req, res) => {
   });
 });
 
-// Rota: adicionar evento
+// Rota: adicionar evento na agenda
 app.post("/agenda", (req, res) => {
   const { titulo, data_evento, horario, local } = req.body;
 
@@ -109,7 +114,7 @@ app.get("/agenda", (req, res) => {
   });
 });
 
-// Rota: deletar evento
+// Rota: deletar evento pelo ID
 app.delete("/agenda/:id", (req, res) => {
   const { id } = req.params;
 
