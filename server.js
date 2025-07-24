@@ -2,23 +2,35 @@ import express from "express";
 import cors from "cors";
 import mysql from "mysql2";
 import multer from "multer";
-import path, { dirname } from "path";
-import { fileURLToPath } from "url";
 import dotenv from "dotenv";
+import { v2 as cloudinary } from "cloudinary";
+import { CloudinaryStorage } from "multer-storage-cloudinary";
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Servir arquivos estáticos (imagens)
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// Configurar Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
-// Conexão com MySQL (Railway)
+// Storage com multer-storage-cloudinary
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "cultos", // nome da pasta na conta do Cloudinary
+    allowed_formats: ["jpg", "png", "jpeg", "webp"],
+  },
+});
+
+const upload = multer({ storage });
+
+// Conexão com banco MySQL (Railway)
 const db = mysql.createConnection({
   host: process.env.DB_HOST,
   port: process.env.DB_PORT,
@@ -32,24 +44,13 @@ db.connect((err) => {
     console.error("Erro ao conectar ao MySQL:", err);
     return;
   }
-  console.log("Conectado ao MySQL do Railway!");
+  console.log("✅ Conectado ao MySQL do Railway!");
 });
 
-// Configuração do multer
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, "uploads/");
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
-  },
-});
-const upload = multer({ storage });
-
-// Rota: inserir culto
+// Rota: publicar culto com imagem (Cloudinary)
 app.post("/cultos", upload.single("imagem"), (req, res) => {
   const { titulo } = req.body;
-  const imagem_path = req.file ? `/uploads/${req.file.filename}` : null;
+  const imagem_path = req.file?.path || null; // URL da imagem no Cloudinary
 
   if (!titulo || !imagem_path) {
     return res.status(400).json({ erro: "Faltando título ou imagem" });
@@ -58,10 +59,10 @@ app.post("/cultos", upload.single("imagem"), (req, res) => {
   const sql = "INSERT INTO cultos (titulo, imagem_path) VALUES (?, ?)";
   db.query(sql, [titulo, imagem_path], (err) => {
     if (err) {
-      console.error("Erro ao inserir no banco:", err);
-      return res.status(500).json({ erro: "Erro no banco de dados" });
+      console.error("Erro ao inserir culto:", err);
+      return res.status(500).json({ erro: "Erro ao salvar culto" });
     }
-    res.json({ status: "sucesso" });
+    res.json({ status: "Culto publicado com sucesso!" });
   });
 });
 
@@ -70,8 +71,8 @@ app.get("/cultos/ultimo", (req, res) => {
   const sql = "SELECT * FROM cultos ORDER BY criado_em DESC LIMIT 1";
   db.query(sql, (err, results) => {
     if (err) {
-      console.error("Erro ao consultar banco:", err);
-      return res.status(500).json({ erro: "Erro no banco de dados" });
+      console.error("Erro ao buscar culto:", err);
+      return res.status(500).json({ erro: "Erro ao buscar culto" });
     }
     res.json(results[0]);
   });
@@ -92,7 +93,7 @@ app.post("/agenda", (req, res) => {
       console.error("Erro ao inserir evento:", err);
       return res.status(500).json({ erro: "Erro ao cadastrar evento" });
     }
-    res.json({ status: "sucesso" });
+    res.json({ status: "Evento adicionado com sucesso!" });
   });
 });
 
@@ -102,7 +103,7 @@ app.get("/agenda", (req, res) => {
   db.query(sql, (err, results) => {
     if (err) {
       console.error("Erro ao buscar eventos:", err);
-      return res.status(500).json({ erro: "Erro no banco de dados" });
+      return res.status(500).json({ erro: "Erro ao buscar eventos" });
     }
     res.json(results);
   });
@@ -125,7 +126,8 @@ app.delete("/agenda/:id", (req, res) => {
   });
 });
 
+// Iniciar servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Servidor rodando na porta ${PORT}`);
+  console.log(`🚀 Servidor rodando na porta ${PORT}`);
 });
