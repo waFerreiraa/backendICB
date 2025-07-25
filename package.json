@@ -3,20 +3,18 @@
     "cloudinary": "^1.41.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
-    "espress": "^0.0.0",
     "express": "^5.1.0",
     "multer": "^2.0.2",
     "multer-storage-cloudinary": "^4.0.0",
-    "mysql2": "^3.14.2",
-    "nodemon": "^3.1.10"
+    "mysql2": "^3.14.2"
   },
   "name": "backend",
   "version": "1.0.0",
-  "main": "db.js",
+  "main": "server.js",
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "nodemon server.js"
+    "start": "node server.js"
   },
   "keywords": [],
   "author": "",
