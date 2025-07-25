@@ -53,20 +53,25 @@ db.getConnection((err, connection) => {
 });
 
 // Rota: publicar culto com upload de imagem
-app.post("/cultos", (req, res) => { // Removido 'upload.single("imagem")'
+// REVERTIDO: Com 'upload.single("imagem")' e lógica de DB
+app.post("/cultos", upload.single("imagem"), (req, res) => {
   const { titulo } = req.body;
-  // Removida a linha de imagem_path e a validação por enquanto para isolar
-  // const imagem_path = req.file?.path; 
+  const imagem_path = req.file?.path; // req.file deve estar disponível
 
-  // if (!titulo || !imagem_path) {
-  //   return res.status(400).json({ erro: "Faltando título ou imagem" });
-  // }
+  if (!titulo || !imagem_path) {
+    return res.status(400).json({ erro: "Faltando título ou imagem" });
+  }
 
-  // Para teste, vamos apenas retornar sucesso
-  console.log('Requisição POST /cultos recebida!');
-  console.log('Título:', titulo);
-  return res.json({ status: "Culto recebido para teste!" }); 
+  const sql = "INSERT INTO cultos (titulo, imagem_path) VALUES (?, ?)";
+  db.query(sql, [titulo, imagem_path], (err) => {
+    if (err) {
+      console.error("Erro ao inserir culto:", err);
+      return res.status(500).json({ erro: "Erro ao salvar culto" });
+    }
+    res.json({ status: "Culto publicado com sucesso!" });
+  });
 });
+
 // Rota: pegar último culto
 app.get("/cultos/ultimo", (req, res) => {
   const sql = "SELECT * FROM cultos ORDER BY criado_em DESC LIMIT 1";
