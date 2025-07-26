@@ -1,12 +1,12 @@
 import express from "express";
 import cors from "cors";
-import mysql from "mysql2/promise"; // <-- IMPORTANTE: Usando 'mysql2/promise' para async/await
+import mysql from "mysql2/promise"; // Continua usando 'mysql2/promise' para async/await
 import multer from "multer";
 import dotenv from "dotenv";
 import { v2 as cloudinary } from "cloudinary";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
-import jwt from "jsonwebtoken"; // <-- NOVA DEPENDÊNCIA: Para autenticação JWT
-import bcrypt from "bcryptjs"; // <-- NOVA DEPENDÊNCIA: Para hashing de senhas
+// import jwt from "jsonwebtoken"; // REMOVIDO
+// import bcrypt from "bcryptjs"; // REMOVIDO
 
 dotenv.config();
 
@@ -40,7 +40,7 @@ const upload = multer({
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.mimetype)) {
       const error = new Error("Formato de arquivo não permitido. Apenas JPG, PNG, WEBP.");
-      error.status = 400; // Define um status para o erro
+      error.status = 400;
       return cb(error, false);
     }
     cb(null, true);
@@ -64,10 +64,10 @@ const db = mysql.createPool({
   try {
     const connection = await db.getConnection();
     console.log("✅ Conectado ao MySQL do Railway!");
-    connection.release(); // Libera conexão
+    connection.release();
   } catch (err) {
     console.error("❌ Erro ao conectar ao MySQL:", err.message);
-    process.exit(1); // Encerra app se não conectar
+    process.exit(1);
   }
 })();
 
@@ -80,75 +80,22 @@ app.use((err, req, res, next) => {
       return res.status(400).json({ erro: "Arquivo muito grande. Máximo 5MB." });
     }
     return res.status(400).json({ erro: err.message });
-  } else if (err.status && err.message) { // Erros customizados do fileFilter
+  } else if (err.status && err.message) {
     return res.status(err.status).json({ erro: err.message });
   }
-  next(err); // Passa para o próximo middleware de erro se não for erro do Multer
+  next(err);
 });
 
-// Middleware de autenticação JWT
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Espera formato: Bearer TOKEN
+// REMOVIDO: Middleware de autenticação JWT
+// REMOVIDO: Rotas de Autenticação (/login)
 
-  if (token == null) {
-    return res.status(401).json({ erro: "Token de autenticação não fornecido." });
-  }
-
-  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-    if (err) {
-      console.error("Erro na verificação do token:", err);
-      // Erro comum: TokenExpiredError
-      if (err.name === 'TokenExpiredError') {
-        return res.status(401).json({ erro: "Token expirado. Faça login novamente." });
-      }
-      return res.status(403).json({ erro: "Token inválido ou acesso negado." });
-    }
-    req.user = user; // Adiciona as informações do usuário decodificadas ao objeto req
-    next();
-  });
-};
-
-// --- Rotas de Autenticação ---
-
-app.post("/login", async (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) {
-    return res.status(400).json({ erro: "Usuário e senha são obrigatórios." });
-  }
-
-  try {
-    const [rows] = await db.query("SELECT * FROM users WHERE username = ?", [username]);
-    const user = rows[0];
-
-    if (!user) {
-      return res.status(401).json({ erro: "Usuário não encontrado ou credenciais inválidas." });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-
-    if (!isMatch) {
-      return res.status(401).json({ erro: "Senha incorreta ou credenciais inválidas." });
-    }
-
-    // Gerar JWT. Payload inclui id e username. Expira em 1 hora.
-    const token = jwt.sign({ id: user.id, username: user.username }, process.env.JWT_SECRET, { expiresIn: '1h' });
-    res.json({ mensagem: "Login bem-sucedido!", token });
-
-  } catch (err) {
-    console.error("Erro no login:", err);
-    res.status(500).json({ erro: "Erro interno do servidor ao tentar fazer login." });
-  }
-});
-
-// --- Rotas de Culto (Protegidas) ---
+// --- Rotas de Culto (AGORA PÚBLICAS) ---
 
 // Rota: publicar culto com upload de imagem
-app.post("/cultos", authenticateToken, upload.single("imagem"), async (req, res) => {
+app.post("/cultos", upload.single("imagem"), async (req, res) => {
   const { titulo } = req.body;
-  const imagem_path = req.file?.path; // URL da imagem no Cloudinary
-  const public_id = req.file?.filename; // Public ID gerado pelo Cloudinary, usado para exclusão
+  const imagem_path = req.file?.path;
+  const public_id = req.file?.filename;
 
   if (!titulo || !imagem_path) {
     return res.status(400).json({ erro: "Faltando título ou imagem. Certifique-se de que a imagem foi enviada." });
@@ -160,7 +107,6 @@ app.post("/cultos", authenticateToken, upload.single("imagem"), async (req, res)
     res.json({ status: "Culto publicado com sucesso!" });
   } catch (err) {
     console.error("Erro ao inserir culto no DB:", err);
-    // Se ocorrer um erro no DB após o upload para Cloudinary, tente remover a imagem
     if (public_id) {
         cloudinary.uploader.destroy(public_id, (error, result) => {
             if (error) console.error("Erro ao deletar imagem do Cloudinary após erro no DB:", error);
@@ -171,12 +117,12 @@ app.post("/cultos", authenticateToken, upload.single("imagem"), async (req, res)
   }
 });
 
-// Rota: atualizar culto (título e/ou imagem) <-- NOVA ROTA
-app.put("/cultos/:id", authenticateToken, upload.single("imagem"), async (req, res) => {
+// Rota: atualizar culto (título e/ou imagem)
+app.put("/cultos/:id", upload.single("imagem"), async (req, res) => {
   const { id } = req.params;
   const { titulo } = req.body;
   const new_imagem_path = req.file?.path;
-  const new_public_id = req.file?.filename; // Public ID da nova imagem
+  const new_public_id = req.file?.filename;
 
   if (!titulo && !new_imagem_path) {
     return res.status(400).json({ erro: "Pelo menos um campo (titulo ou imagem) deve ser fornecido para atualização." });
@@ -187,7 +133,6 @@ app.put("/cultos/:id", authenticateToken, upload.single("imagem"), async (req, r
     let params;
     let old_public_id = null;
 
-    // Se uma nova imagem for enviada, primeiro precisamos do public_id da imagem antiga
     if (new_imagem_path) {
         const [cultoRows] = await db.query("SELECT public_id FROM cultos WHERE id = ?", [id]);
         if (cultoRows.length > 0) {
@@ -201,7 +146,7 @@ app.put("/cultos/:id", authenticateToken, upload.single("imagem"), async (req, r
     } else if (new_imagem_path) {
       sql = "UPDATE cultos SET imagem_path = ?, public_id = ? WHERE id = ?";
       params = [new_imagem_path, new_public_id, id];
-    } else { // Apenas título
+    } else {
       sql = "UPDATE cultos SET titulo = ? WHERE id = ?";
       params = [titulo, id];
     }
@@ -209,7 +154,6 @@ app.put("/cultos/:id", authenticateToken, upload.single("imagem"), async (req, r
     const [result] = await db.query(sql, params);
 
     if (result.affectedRows === 0) {
-      // Se não encontrou o culto para atualizar, e uma nova imagem foi enviada, delete-a do Cloudinary
       if (new_public_id) {
           cloudinary.uploader.destroy(new_public_id, (error, destroyResult) => {
               if (error) console.error("Erro ao deletar nova imagem do Cloudinary após falha na atualização do DB:", error);
@@ -219,7 +163,6 @@ app.put("/cultos/:id", authenticateToken, upload.single("imagem"), async (req, r
       return res.status(404).json({ erro: "Culto não encontrado." });
     }
 
-    // Se a atualização foi bem-sucedida e uma nova imagem foi enviada, delete a imagem antiga do Cloudinary
     if (old_public_id && new_imagem_path) {
         cloudinary.uploader.destroy(old_public_id, (error, destroyResult) => {
             if (error) console.error("Erro ao deletar imagem antiga do Cloudinary:", error);
@@ -231,7 +174,6 @@ app.put("/cultos/:id", authenticateToken, upload.single("imagem"), async (req, r
 
   } catch (err) {
     console.error("Erro ao atualizar culto:", err);
-    // Em caso de erro, se uma nova imagem foi enviada, tente removê-la do Cloudinary
     if (new_public_id) {
         cloudinary.uploader.destroy(new_public_id, (error, destroyResult) => {
             if (error) console.error("Erro ao deletar nova imagem do Cloudinary após erro no DB:", error);
@@ -242,12 +184,11 @@ app.put("/cultos/:id", authenticateToken, upload.single("imagem"), async (req, r
   }
 });
 
-// Rota: deletar culto (e sua imagem do Cloudinary) <-- ROTA ATUALIZADA
-app.delete("/cultos/:id", authenticateToken, async (req, res) => {
+// Rota: deletar culto (e sua imagem do Cloudinary)
+app.delete("/cultos/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
-    // Primeiro, obtenha o public_id da imagem para deletar do Cloudinary
     const [cultoRows] = await db.query("SELECT public_id FROM cultos WHERE id = ?", [id]);
     const public_id_to_delete = cultoRows.length > 0 ? cultoRows[0].public_id : null;
 
@@ -257,7 +198,6 @@ app.delete("/cultos/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ erro: "Culto não encontrado." });
     }
 
-    // Se a deleção do DB foi bem-sucedida, delete a imagem do Cloudinary
     if (public_id_to_delete) {
       cloudinary.uploader.destroy(public_id_to_delete, (error, destroyResult) => {
         if (error) console.error("Erro ao deletar imagem do Cloudinary:", error);
@@ -272,8 +212,7 @@ app.delete("/cultos/:id", authenticateToken, async (req, res) => {
   }
 });
 
-
-// Rota: pegar último culto (pública) - SEM MUDANÇAS DE FUNCIONALIDADE
+// Rota: pegar último culto (pública)
 app.get("/cultos/ultimo", async (req, res) => {
   try {
     const [results] = await db.query("SELECT * FROM cultos ORDER BY criado_em DESC LIMIT 1");
@@ -284,29 +223,26 @@ app.get("/cultos/ultimo", async (req, res) => {
   }
 });
 
-// --- Rotas de Agenda (Protegidas) ---
+// --- Rotas de Agenda (AGORA PÚBLICAS) ---
 
-// Rota: adicionar evento na agenda <-- ROTA AGORA PROTEGIDA E COM VALIDAÇÃO
-app.post("/agenda", authenticateToken, async (req, res) => {
+// Rota: adicionar evento na agenda
+app.post("/agenda", async (req, res) => {
   const { titulo, data_evento, horario, local } = req.body;
 
   if (!titulo || !data_evento || !horario || !local) {
     return res.status(400).json({ erro: "Preencha todos os campos." });
   }
 
-  // Validação básica de formato de data e hora (pode ser mais robusta com bibliotecas)
-  if (isNaN(new Date(data_evento).getTime())) { // Usar getTime() para verificar data inválida
+  if (isNaN(new Date(data_evento).getTime())) {
     return res.status(400).json({ erro: "Formato de data inválido. Use YYYY-MM-DD." });
   }
-  // Exemplo de validação de horário (regex HH:MM)
   if (!/^(?:2[0-3]|[01]?[0-9]):[0-5][0-9]$/.test(horario)) {
     return res.status(400).json({ erro: "Formato de horário inválido. Use HH:MM." });
   }
 
   try {
-    // A ordem dos parâmetros no SQL e na array DEVE CORRESPONDER
     const sql = "INSERT INTO agenda (titulo, data_evento, horario, local) VALUES (?, ?, ?, ?)";
-    await db.query(sql, [titulo, data_evento, horario, local]); // Ordem ajustada para corresponder ao SQL
+    await db.query(sql, [titulo, data_evento, horario, local]);
     res.json({ status: "Evento adicionado com sucesso!" });
   } catch (err) {
     console.error("Erro ao inserir evento:", err);
@@ -314,8 +250,8 @@ app.post("/agenda", authenticateToken, async (req, res) => {
   }
 });
 
-// Rota: atualizar evento <-- NOVA ROTA E AGORA PROTEGIDA
-app.put("/agenda/:id", authenticateToken, async (req, res) => {
+// Rota: atualizar evento
+app.put("/agenda/:id", async (req, res) => {
   const { id } = req.params;
   const { titulo, data_evento, horario, local } = req.body;
 
@@ -353,7 +289,7 @@ app.put("/agenda/:id", authenticateToken, async (req, res) => {
     return res.status(400).json({ erro: "Nenhum campo válido para atualização fornecido." });
   }
 
-  params.push(id); // Adiciona o ID ao final dos parâmetros para a cláusula WHERE
+  params.push(id);
 
   const sql = `UPDATE agenda SET ${updates.join(", ")} WHERE id = ?`;
 
@@ -369,11 +305,9 @@ app.put("/agenda/:id", authenticateToken, async (req, res) => {
   }
 });
 
-
-// Rota: listar eventos (pública) - SEM MUDANÇAS DE FUNCIONALIDADE
+// Rota: listar eventos (pública)
 app.get("/agenda", async (req, res) => {
   try {
-    // ORDER BY data_evento ASC (eventos mais próximos primeiro), depois por horario
     const [results] = await db.query("SELECT * FROM agenda ORDER BY data_evento ASC, horario ASC");
     res.json(results);
   } catch (err) {
@@ -382,8 +316,8 @@ app.get("/agenda", async (req, res) => {
   }
 });
 
-// Rota: deletar evento pelo ID <-- ROTA AGORA PROTEGIDA
-app.delete("/agenda/:id", authenticateToken, async (req, res) => {
+// Rota: deletar evento pelo ID
+app.delete("/agenda/:id", async (req, res) => {
   const { id } = req.params;
 
   try {
