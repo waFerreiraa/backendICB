@@ -53,23 +53,28 @@ db.getConnection((err, connection) => {
 });
 
 // Rota: publicar culto com upload de imagem
+// Rota: publicar culto com upload de imagem no Cloudinary
 app.post("/cultos", upload.single("imagem"), (req, res) => {
   const { titulo } = req.body;
-  const imagem_path = req.file?.path; // req.file deve estar disponível
+  const imagem_path = req.file?.path || null;
 
   if (!titulo || !imagem_path) {
-    return res.status(400).json({ erro: "Faltando título ou imagem" });
+    return res.status(400).json({ erro: "Título e imagem são obrigatórios." });
   }
 
   const sql = "INSERT INTO cultos (titulo, imagem_path) VALUES (?, ?)";
   db.query(sql, [titulo, imagem_path], (err) => {
     if (err) {
       console.error("Erro ao inserir culto:", err);
-      return res.status(500).json({ erro: "Erro ao salvar culto" });
+      return res.status(500).json({ erro: "Erro ao salvar culto." });
     }
-    res.json({ status: "Culto publicado com sucesso!" });
+    res.json({ status: "Culto publicado com sucesso!", imagem: imagem_path });
   });
 });
+
+
+
+
 
 // Rota: pegar último culto
 app.get("/cultos/ultimo", (req, res) => {
