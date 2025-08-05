@@ -55,6 +55,8 @@ db.getConnection((err, connection) => {
 // Rota: publicar culto com upload de imagem
 // Rota: publicar culto com upload de imagem no Cloudinary
 app.post("/cultos", upload.single("imagem"), (req, res) => {
+  console.log("Arquivo recebido:", req.file); // <-- para debugar
+
   const { titulo } = req.body;
   const imagem_path = req.file?.path || null;
 
@@ -71,10 +73,6 @@ app.post("/cultos", upload.single("imagem"), (req, res) => {
     res.json({ status: "Culto publicado com sucesso!", imagem: imagem_path });
   });
 });
-
-
-
-
 
 // Rota: pegar último culto
 app.get("/cultos/ultimo", (req, res) => {
@@ -136,6 +134,13 @@ app.delete("/agenda/:id", (req, res) => {
   });
 });
 
+// Antes de app.listen, adicione:
+app.use((err, req, res, next) => {
+  console.error("Erro inesperado:", err);
+  res
+    .status(500)
+    .json({ erro: "Erro interno do servidor", detalhes: err.message || err });
+});
 // Iniciar servidor
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
